@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+*.log
+
+# Local working notes, not part of the delivery
+.scratch/
+GLOSSARY.md
+docs/adr/
+docs/ai-log.md

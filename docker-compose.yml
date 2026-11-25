@@ -1,0 +1,69 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: competitor_pulse
+      POSTGRES_PASSWORD: competitor_pulse
+      POSTGRES_DB: competitor_pulse
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U competitor_pulse']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # The provided Source and mock LLM run from the read-only files/ directory unchanged.
+  listing-source:
+    image: node:22-alpine
+    working_dir: /app
+    command: ['node', 'listing-source-server.mjs']
+    volumes:
+      - ./files/listing-source:/app:ro
+    ports:
+      - '4002:4002'
+
+  mock-llm:
+    image: python:3-alpine
+    working_dir: /app
+    command: ['python3', 'mock-llm-server.py']
+    volumes:
+      - ./files/mock-llm:/app:ro
+    ports:
+      - '4001:4001'
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      PORT: '3000'
+      DATABASE_URL: postgres://competitor_pulse:competitor_pulse@postgres:5432/competitor_pulse
+      SOURCE_BASE_URL: ${SOURCE_BASE_URL:-http://listing-source:4002}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://mock-llm:4001/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-mock-key}
+      LLM_MODEL: ${LLM_MODEL:-mock-llm}
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-900}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      listing-source:
+        condition: service_started
+      mock-llm:
+        condition: service_started
+    ports:
+      - '3000:3000'
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      - backend
+    ports:
+      - '8080:80'
+
+volumes:
+  pgdata:

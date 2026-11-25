@@ -18,7 +18,12 @@ Tracks competitor product listings, detects changes that matter, and explains th
 
 ## Commands
 
-Fill in once the project is scaffolded (install, dev, test, lint, typecheck, migrate, `docker compose up`).
+- Install: `npm ci` (npm workspaces: `backend`, `frontend`; also installs the husky hook).
+- Backend dev: `npm run dev -w backend`. Frontend dev: `npm run dev -w frontend`.
+- Migrate: `npm run migrate -w backend`. Generate a new migration after a schema change: `npm run db:generate -w backend`.
+- Test: `npm test`. Integration tests need Postgres: `docker compose up -d postgres` and set `TEST_DATABASE_URL` (see `.env.example` for the URL shape).
+- Lint, format, typecheck: `npm run lint`, `npm run format:check`, `npm run typecheck`.
+- Whole system: `docker compose up --build`. UI on :8080, API on :3000, Source on :4002, mock LLM on :4001.
 
 ## Agent skills
 
