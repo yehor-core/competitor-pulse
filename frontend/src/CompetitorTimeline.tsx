@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { summaryNote } from './summary-note';
+import { useAutoRefresh } from './useAutoRefresh';
 
 interface Snapshot {
   fetchedAt: string;
@@ -20,49 +22,30 @@ const POLL_STATUS_TEXT: Record<Snapshot['pollStatus'], string> = {
   delisted: 'delisted (the source no longer lists this competitor)',
 };
 
-// Why there is no Summary, per status. Shown whenever a Change has none, so the user is never left guessing.
-const NO_SUMMARY_TEXT: Record<string, string> = {
-  pending: 'Summary is being written.',
-  llm_timeout: 'Summary not available: the language model took too long to answer.',
-  llm_failed:
-    'Summary not available: the language model could not be reached or returned an error.',
-  llm_unusable: 'Summary not available: the language model returned an answer we could not use.',
-  budget_exhausted: 'Summary not available: the daily limit of language model calls was reached.',
-  not_applicable: 'Summary not available: nothing changed.',
-};
-
-export function summaryText(snapshot: Pick<Snapshot, 'summary' | 'summaryStatus'>): string {
-  return (
-    snapshot.summary ??
-    NO_SUMMARY_TEXT[snapshot.summaryStatus] ??
-    `Summary not available (${snapshot.summaryStatus}).`
-  );
-}
-
 export function CompetitorTimeline({ id, onBack }: { id: string; onBack: () => void }) {
   const [snapshots, setSnapshots] = useState<Snapshot[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const response = await fetch(`/api/competitors/${encodeURIComponent(id)}/snapshots`);
-        if (!response.ok) throw new Error(`Request failed with HTTP ${String(response.status)}`);
-        const body = (await response.json()) as Snapshot[];
-        if (!cancelled) {
-          setSnapshots(body);
-          setError(null);
-        }
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Could not load the timeline');
+  const latestId = useRef(id);
+  latestId.current = id;
+
+  const load = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/competitors/${encodeURIComponent(id)}/snapshots`);
+      if (!response.ok) throw new Error(`Request failed with HTTP ${String(response.status)}`);
+      const body = (await response.json()) as Snapshot[];
+      if (latestId.current === id) {
+        setSnapshots(body);
+        setError(null);
+      }
+    } catch (e) {
+      if (latestId.current === id) {
+        setError(e instanceof Error ? e.message : 'Could not load the timeline');
       }
     }
-    void load();
-    return () => {
-      cancelled = true;
-    };
   }, [id]);
+
+  useAutoRefresh(load);
 
   return (
     <section>
@@ -73,7 +56,7 @@ export function CompetitorTimeline({ id, onBack }: { id: string; onBack: () => v
       {error !== null && <p role="alert">{error}</p>}
       {snapshots?.length === 0 && <p>No polls yet.</p>}
       <ol reversed>
-        {snapshots?.map((snapshot) => (
+        {snapshots?.map((snapshot, index) => (
           <li key={snapshot.fetchedAt}>
             <p>
               <time dateTime={snapshot.fetchedAt}>
@@ -83,7 +66,13 @@ export function CompetitorTimeline({ id, onBack }: { id: string; onBack: () => v
               {snapshot.failureReason !== null && <span> ({snapshot.failureReason})</span>}
               {snapshot.changed && <strong> - changed</strong>}
             </p>
-            {snapshot.changed && <p>{summaryText(snapshot)}</p>}
+            <p>
+              {summaryNote(
+                snapshot,
+                // Newest first, so older Snapshots follow; the Baseline is the last `ok` Poll among them.
+                snapshots.slice(index + 1).some((older) => older.pollStatus === 'ok'),
+              )}
+            </p>
             {snapshot.pollStatus === 'ok' && (
               <dl>
                 <dt>Title</dt>

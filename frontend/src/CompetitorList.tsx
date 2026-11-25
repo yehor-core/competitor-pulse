@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState, type SubmitEvent } from 'react';
+import { useCallback, useState, type SubmitEvent } from 'react';
+import { changedInLast24hLabel } from './summary-note';
+import { useAutoRefresh } from './useAutoRefresh';
 
 interface Competitor {
   id: string;
@@ -41,9 +43,7 @@ export function CompetitorList({ onOpen }: { onOpen: (id: string) => void }) {
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useAutoRefresh(load);
 
   async function send(url: string, init: RequestInit): Promise<boolean> {
     try {
@@ -111,7 +111,9 @@ export function CompetitorList({ onOpen }: { onOpen: (id: string) => void }) {
               {competitor.awaitingFirstPollReason !== null && (
                 <span> (waiting for first poll: {competitor.awaitingFirstPollReason})</span>
               )}
-              {competitor.changedInLast24h && <strong> Changed in the last 24 hours</strong>}
+              {changedInLast24hLabel(competitor.changedInLast24h) !== null && (
+                <strong> {changedInLast24hLabel(competitor.changedInLast24h)}</strong>
+              )}
               <span>
                 {' '}
                 - last change:{' '}
