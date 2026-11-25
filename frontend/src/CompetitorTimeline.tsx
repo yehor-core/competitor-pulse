@@ -62,6 +62,7 @@ export function CompetitorTimeline({ id, onBack }: { id: string; onBack: () => v
               </time>{' '}
               - poll status: {POLL_STATUS_TEXT[snapshot.pollStatus]}
               {snapshot.failureReason !== null && <span> ({snapshot.failureReason})</span>}
+              {snapshot.changed && <strong> - changed</strong>}
             </p>
             {snapshot.pollStatus === 'ok' && (
               <dl>

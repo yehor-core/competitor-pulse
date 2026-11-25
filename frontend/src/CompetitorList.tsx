@@ -3,6 +3,14 @@ import { useCallback, useEffect, useState, type SubmitEvent } from 'react';
 interface Competitor {
   id: string;
   awaitingFirstPollReason: string | null;
+  lastChangedAt: string | null;
+  changedInLast24h: boolean;
+  lastPolledAt: string | null;
+  lastPollStatus: 'ok' | 'failed' | 'incomplete' | 'delisted' | null;
+}
+
+function when(iso: string): string {
+  return new Date(iso).toLocaleString();
 }
 
 async function errorMessage(response: Response): Promise<string> {
@@ -102,7 +110,17 @@ export function CompetitorList({ onOpen }: { onOpen: (id: string) => void }) {
               </button>
               {competitor.awaitingFirstPollReason !== null && (
                 <span> (waiting for first poll: {competitor.awaitingFirstPollReason})</span>
-              )}{' '}
+              )}
+              {competitor.changedInLast24h && <strong> Changed in the last 24 hours</strong>}
+              <span>
+                {' '}
+                - last change:{' '}
+                {competitor.lastChangedAt === null ? 'none yet' : when(competitor.lastChangedAt)};
+                last poll:{' '}
+                {competitor.lastPolledAt === null
+                  ? 'not polled yet'
+                  : `${when(competitor.lastPolledAt)} (${competitor.lastPollStatus ?? 'unknown'})`}
+              </span>{' '}
               <button
                 type="button"
                 onClick={() => {
