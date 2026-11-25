@@ -2,7 +2,7 @@
 
 CompetitorPulse tracks competitor product listings over time. A scheduler polls the listing source, decides which differences matter to a product manager, and asks an LLM to explain each change in plain English. A small React UI shows the competitor list and a timeline per competitor.
 
-- **Live instance:** TODO: fill in after deploying. The system is **not deployed yet**; the deployment files and procedure are ready (see [Deploy to a VPS](#deploy-to-a-vps)).
+- **Live instance:** <https://v2202608404314505910.hotsrv.de/> (API health: <https://v2202608404314505910.hotsrv.de/api/health>). It runs the compose file plus `docker-compose.prod.yml` on a VPS, see [Deploy to a VPS](#deploy-to-a-vps).
 
 Terms follow the domain language of the project: a **Competitor** is tracked by id, each attempt to fetch its listing is a **Poll**, every Poll is stored as a **Snapshot**, and a **Change** is a difference that matters, compared with the **Baseline** (the last successful Poll).
 
