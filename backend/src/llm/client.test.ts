@@ -53,15 +53,25 @@ describe('LLM client', () => {
     expect(llm?.requests).toHaveLength(1);
   });
 
-  it('reports an unreachable endpoint as failed', async () => {
+  it('reports a refused connection as not sent, because nothing left the process', async () => {
+    // Port 1 is blocked by fetch itself, so use a port that was open a moment ago.
+    const closed = await startStubLlm({ status: 200 });
+    const baseUrl = closed.baseUrl;
+    await closed.stop();
+    const client = createLlmClient({ baseUrl, apiKey: 'k', model: 'm', timeoutMs: 500 });
+
+    expect(await client.complete(prompt)).toMatchObject({ kind: 'not_sent' });
+  });
+
+  it('reports a base URL that cannot build a request as not sent', async () => {
     const client = createLlmClient({
-      baseUrl: 'http://127.0.0.1:1/v1',
+      baseUrl: 'not a url',
       apiKey: 'k',
       model: 'm',
       timeoutMs: 500,
     });
 
-    expect(await client.complete(prompt)).toMatchObject({ kind: 'failed' });
+    expect(await client.complete(prompt)).toMatchObject({ kind: 'not_sent' });
   });
 
   it.each([

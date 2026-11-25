@@ -5,6 +5,8 @@ export type LlmResult =
   | { kind: 'ok'; text: string }
   | { kind: 'timeout' }
   | { kind: 'failed'; reason: string }
+  /** The request provably never left, so the Daily LLM budget slot can be given back. */
+  | { kind: 'not_sent'; reason: string }
   | { kind: 'unusable' };
 
 export interface LlmPrompt {
@@ -32,6 +34,22 @@ const chatCompletionSchema = z.object({
 const isTimeout = (error: unknown): boolean =>
   error instanceof DOMException && error.name === 'TimeoutError';
 
+// Errors raised before any bytes reach the provider: the name did not resolve or the connection was refused.
+const NEVER_SENT_CODES = new Set([
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+]);
+
+const neverSent = (error: unknown): boolean =>
+  error instanceof Error &&
+  error.cause instanceof Error &&
+  'code' in error.cause &&
+  typeof error.cause.code === 'string' &&
+  NEVER_SENT_CODES.has(error.cause.code);
+
 export function createLlmClient({
   baseUrl,
   apiKey,
@@ -44,9 +62,9 @@ export function createLlmClient({
     async complete({ system, user }) {
       // One signal covers connecting, waiting and reading the body, so a stalled body also times out.
       const signal = AbortSignal.timeout(timeoutMs);
-      let response: Response;
+      let request: Request;
       try {
-        response = await fetch(new URL('chat/completions', base), {
+        request = new Request(new URL('chat/completions', base), {
           method: 'POST',
           signal,
           headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
@@ -58,8 +76,15 @@ export function createLlmClient({
             ],
           }),
         });
+      } catch {
+        return { kind: 'not_sent', reason: 'LLM request could not be built' };
+      }
+      let response: Response;
+      try {
+        response = await fetch(request);
       } catch (error) {
         if (isTimeout(error)) return { kind: 'timeout' };
+        if (neverSent(error)) return { kind: 'not_sent', reason: 'LLM is unreachable' };
         return { kind: 'failed', reason: 'LLM is unreachable' };
       }
       if (!response.ok) {
