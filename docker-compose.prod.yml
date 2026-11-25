@@ -32,6 +32,15 @@ services:
   frontend:
     restart: unless-stopped
     ports: !override []
+  # Prometheus stays internal; Grafana listens on the server's loopback only. Reach it through an SSH tunnel (see "Monitoring" in README.md).
+  prometheus:
+    restart: unless-stopped
+    ports: !override []
+  grafana:
+    restart: unless-stopped
+    ports: !override ['127.0.0.1:3001:3000']
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD to a non-default password}
 
 volumes:
   caddy_data:
