@@ -17,6 +17,8 @@ export interface SchedulerOptions {
   maxInFlight: number;
   /** How many more requests the Rate limit allows right now; a Poll is claimed only when one is free. */
   budget: { available(): number };
+  /** Called once the Snapshot of a Change that needs a Summary is committed; must not throw or block. */
+  onChangePending?: (snapshotId: number) => void;
 }
 
 export interface Scheduler {
@@ -58,7 +60,7 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
   async function poll(id: string): Promise<void> {
     const fetchedAt = new Date();
     const outcome = outcomeOf(await source.fetchListing(id));
-    await db.transaction(async (tx) => {
+    const snapshotId = await db.transaction(async (tx) => {
       // Failed and incomplete Snapshots hold no listing, so only ok and delisted Snapshots say what came before.
       const [lastKnown] = await tx
         .select()
@@ -87,21 +89,27 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
           listing: outcome.listing && comparableOf(outcome.listing),
         },
       );
-      await tx.insert(snapshots).values({
-        competitorId: id,
-        fetchedAt,
-        pollStatus: outcome.pollStatus,
-        failureReason: outcome.failureReason,
-        ...outcome.listing,
-        changed: comparison.changed,
-        summary: comparison.summary,
-        summaryStatus: comparison.summaryStatus,
-      });
+      const [saved] = await tx
+        .insert(snapshots)
+        .values({
+          competitorId: id,
+          fetchedAt,
+          pollStatus: outcome.pollStatus,
+          failureReason: outcome.failureReason,
+          ...outcome.listing,
+          changed: comparison.changed,
+          summary: comparison.summary,
+          summaryStatus: comparison.summaryStatus,
+        })
+        .returning({ id: snapshots.id });
       await tx
         .update(competitors)
         .set({ awaitingFirstPollReason: null })
         .where(eq(competitors.id, id));
+      return comparison.summaryStatus === 'pending' ? saved?.id : undefined;
     });
+    // After the commit, so the Summary can never be written for a Snapshot that was not stored.
+    if (snapshotId !== undefined) options.onChangePending?.(snapshotId);
     log.info(
       { competitorId: id, pollStatus: outcome.pollStatus, failureReason: outcome.failureReason },
       'poll finished',

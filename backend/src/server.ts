@@ -3,6 +3,8 @@ import pg from 'pg';
 import { buildApp } from './app.js';
 import { loadConfigOrExit } from './config.js';
 import { createTokenBucket } from './domain/token-bucket.js';
+import { createLlmClient } from './llm/client.js';
+import { createSummaryWorker } from './summaries/worker.js';
 import { createScheduler } from './scheduler/scheduler.js';
 import { createSourceClient } from './source/client.js';
 import { rateLimitSource } from './source/rate-limited.js';
@@ -20,8 +22,22 @@ const source = rateLimitSource(
   bucket,
 );
 const app = buildApp(config, pool, source);
+const db = drizzle(pool);
+const summaries = createSummaryWorker({
+  db,
+  llm: createLlmClient({
+    baseUrl: config.llmBaseUrl,
+    apiKey: config.llmApiKey,
+    model: config.llmModel,
+    timeoutMs: config.llmTimeoutMs,
+  }),
+  log: app.log,
+});
 const scheduler = createScheduler({
-  db: drizzle(pool),
+  db,
+  onChangePending: (snapshotId) => {
+    summaries.enqueue(snapshotId);
+  },
   source,
   log: app.log,
   intervalSeconds: config.pollIntervalSeconds,
@@ -34,6 +50,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
     void scheduler
       .stop()
+      .then(() => summaries.idle())
       .then(() => app.close())
       .then(() => pool.end());
   });
