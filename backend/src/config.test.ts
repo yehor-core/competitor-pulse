@@ -26,6 +26,16 @@ describe('loadConfig', () => {
     });
   });
 
+  it('defaults the Source request rate to 4 per second and lets it be changed', () => {
+    expect(loadConfig(valid).sourceRequestsPerSecond).toBe(4);
+    expect(
+      loadConfig({ ...valid, SOURCE_REQUESTS_PER_SECOND: '2.5' }).sourceRequestsPerSecond,
+    ).toBe(2.5);
+    expect(() => loadConfig({ ...valid, SOURCE_REQUESTS_PER_SECOND: '0' })).toThrow(
+      /SOURCE_REQUESTS_PER_SECOND/,
+    );
+  });
+
   it('names every missing variable in one error', () => {
     const { DATABASE_URL: _db, SOURCE_BASE_URL: _src, ...rest } = valid;
 

@@ -7,9 +7,12 @@ import pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import { runMigrations } from '../db/migrate.js';
+import { createTokenBucket } from '../domain/token-bucket.js';
 import { createSourceClient, type SourceClient } from '../source/client.js';
+import { rateLimitSource } from '../source/rate-limited.js';
 import { startSource, type RunningSource } from '../test-support/source.js';
-import { createScheduler } from './scheduler.js';
+import { pollLagSeconds } from './poll-lag.js';
+import { createScheduler, type SchedulerOptions } from './scheduler.js';
 
 // Real Postgres and the provided Source, as the project rules require.
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -33,7 +36,11 @@ describe.skipIf(!enabled)('scheduled polling', () => {
   let sourceClient: SourceClient;
   let app: FastifyInstance;
 
-  const scheduler = (client: SourceClient = sourceClient, intervalSeconds = 3600) =>
+  const scheduler = (
+    client: SourceClient = sourceClient,
+    intervalSeconds = 3600,
+    overrides: Partial<SchedulerOptions> = {},
+  ) =>
     createScheduler({
       db: drizzle(pool),
       source: client,
@@ -41,6 +48,8 @@ describe.skipIf(!enabled)('scheduled polling', () => {
       intervalSeconds,
       tickMs: 1000,
       maxInFlight: 4,
+      budget: { available: () => 1000 },
+      ...overrides,
     });
 
   async function add(id: string) {
@@ -215,6 +224,123 @@ describe.skipIf(!enabled)('scheduled polling', () => {
 
     const [snapshot] = await snapshotsOf('gone');
     expect(snapshot).toMatchObject({ pollStatus: 'delisted', failureReason: null, title: null });
+  });
+
+  describe('Rate limit', () => {
+    const stubSource = (onFetch: () => Promise<void>): SourceClient => ({
+      fetchListing: async () => {
+        await onFetch();
+        return { kind: 'not_found' };
+      },
+      lookup: () => Promise.resolve({ kind: 'known' }),
+    });
+
+    async function insertDue(count: number) {
+      for (let index = 0; index < count; index += 1) {
+        await pool.query('insert into competitors (id) values ($1)', [`due-${String(index)}`]);
+      }
+    }
+
+    it('claims no more Competitors than the request budget allows', async () => {
+      await insertDue(3);
+      let fetched = 0;
+      const client = stubSource(() => {
+        fetched += 1;
+        return Promise.resolve();
+      });
+
+      await scheduler(client, 3600, { budget: { available: () => 2 } }).tick();
+
+      expect(fetched).toBe(2);
+    });
+
+    it('never has more Polls in flight than the configured cap, even across ticks', async () => {
+      await insertDue(5);
+      let inFlight = 0;
+      let peak = 0;
+      const client = stubSource(async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        inFlight -= 1;
+      });
+      const subject = scheduler(client, 3600, { maxInFlight: 2 });
+
+      await Promise.all([subject.tick(), subject.tick(), subject.tick()]);
+      await subject.tick();
+
+      expect(peak).toBe(2);
+    });
+
+    it('holds the limit against a Source that allows only 2 requests per second', async () => {
+      await source.configure({ rateLimitPerSecond: 2 });
+      for (const id of source.knownIds) {
+        await pool.query('insert into competitors (id) values ($1)', [id]);
+      }
+      const bucket = createTokenBucket({ ratePerSecond: 2, capacity: 1, now: Date.now });
+      const subject = scheduler(rateLimitSource(sourceClient, bucket), 3600, {
+        budget: bucket,
+        maxInFlight: 10,
+      });
+      const started = Date.now();
+      let polls = 0;
+
+      while (polls < 7) {
+        await pool.query("update competitors set next_poll_at = now() - interval '1 second'");
+        await subject.tick();
+        const { rows } = await pool.query<{ count: string }>('select count(*) from snapshots');
+        polls = Number(rows[0]?.count);
+      }
+
+      const byStatus = await source.requestsByStatus();
+      expect(byStatus['429'] ?? 0).toBe(0);
+      // 7 requests at 2 per second with a burst of 1 take at least 3 seconds.
+      expect(Date.now() - started).toBeGreaterThanOrEqual(2900);
+    }, 20_000);
+
+    it('stops polling for the Retry-After after a 429 and then carries on', async () => {
+      await source.configure({ rateLimitPerSecond: 1 });
+      await pool.query('insert into competitors (id) values ($1)', [source.knownId]);
+      const bucket = createTokenBucket({ ratePerSecond: 1, capacity: 1, now: Date.now });
+      const subject = scheduler(rateLimitSource(sourceClient, bucket), 3600, { budget: bucket });
+      // Drain the Source's own bucket behind our back, as another client of the Source would.
+      await Promise.all([1, 2, 3].map(() => fetch(`${source.baseUrl}/listings/${source.knownId}`)));
+
+      await subject.tick();
+      expect(bucket.available()).toBe(0);
+      expect(bucket.msUntilAvailable()).toBeGreaterThan(0);
+
+      const [snapshot] = await snapshotsOf(source.knownId);
+      expect(snapshot?.pollStatus).toBe('failed');
+      expect(snapshot?.failureReason).toMatch(/429/);
+    }, 20_000);
+  });
+
+  describe('Poll lag', () => {
+    it('reports no lag when nothing is overdue', async () => {
+      await add(source.knownId);
+
+      expect(await pollLagSeconds(drizzle(pool))).toBe(0);
+    });
+
+    it('reports how long the most overdue Competitor has waited', async () => {
+      await add(source.knownId);
+      await pool.query("update competitors set next_poll_at = now() - interval '30 seconds'");
+
+      const lag = await pollLagSeconds(drizzle(pool));
+
+      expect(lag).toBeGreaterThanOrEqual(30);
+      expect(lag).toBeLessThan(35);
+    });
+
+    it('ignores Removed competitors', async () => {
+      await add(source.knownId);
+      await pool.query(
+        "update competitors set next_poll_at = now() - interval '30 seconds', removed_at = now()",
+      );
+
+      expect(await pollLagSeconds(drizzle(pool))).toBe(0);
+    });
   });
 
   it('answers 404 for the snapshots of a Competitor that was never tracked', async () => {
