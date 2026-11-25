@@ -1,4 +1,13 @@
-import { bigserial, boolean, index, numeric, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import {
+  bigserial,
+  boolean,
+  index,
+  integer,
+  numeric,
+  pgTable,
+  text,
+  timestamp,
+} from 'drizzle-orm/pg-core';
 
 export const competitors = pgTable(
   'competitors',
@@ -44,3 +53,10 @@ export const snapshots = pgTable(
     index('snapshots_competitor_fetched_idx').on(table.competitorId, table.fetchedAt.desc()),
   ],
 );
+
+export const llmBudget = pgTable('llm_budget', {
+  // The UTC day as YYYY-MM-DD. One row per day that made a call; kept in Postgres so a restart cannot reset it.
+  day: text('day').primaryKey(),
+  // Calls reserved that day, including ones whose outcome is still unknown.
+  used: integer('used').notNull().default(0),
+});
