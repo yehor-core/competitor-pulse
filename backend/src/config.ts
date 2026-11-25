@@ -7,6 +7,7 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   DATABASE_URL: z.string().min(1),
   SOURCE_BASE_URL: httpUrl,
+  SOURCE_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
   LLM_BASE_URL: httpUrl,
   LLM_API_KEY: z.string().min(1),
   LLM_MODEL: z.string().min(1),
@@ -18,6 +19,7 @@ export interface Config {
   logLevel: z.infer<typeof envSchema>['LOG_LEVEL'];
   databaseUrl: string;
   sourceBaseUrl: string;
+  sourceTimeoutMs: number;
   llmBaseUrl: string;
   llmApiKey: string;
   llmModel: string;
@@ -57,6 +59,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     logLevel: values.LOG_LEVEL,
     databaseUrl: values.DATABASE_URL,
     sourceBaseUrl: values.SOURCE_BASE_URL,
+    sourceTimeoutMs: values.SOURCE_TIMEOUT_MS,
     llmBaseUrl: values.LLM_BASE_URL,
     llmApiKey: values.LLM_API_KEY,
     llmModel: values.LLM_MODEL,
