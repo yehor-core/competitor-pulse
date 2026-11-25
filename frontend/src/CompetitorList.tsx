@@ -37,30 +37,36 @@ export function CompetitorList() {
     void load();
   }, [load]);
 
+  async function send(url: string, init: RequestInit): Promise<boolean> {
+    try {
+      const response = await fetch(url, init);
+      if (!response.ok) {
+        setError(await errorMessage(response));
+        return false;
+      }
+      setError(null);
+      return true;
+    } catch {
+      setError('Could not reach the backend');
+      return false;
+    }
+  }
+
   async function add(event: SubmitEvent) {
     event.preventDefault();
-    const response = await fetch('/api/competitors', {
+    const ok = await send('/api/competitors', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ id: newId.trim() }),
     });
-    if (!response.ok) {
-      setError(await errorMessage(response));
-      return;
-    }
+    if (!ok) return;
     setNewId('');
     await load();
   }
 
   async function remove(id: string) {
-    const response = await fetch(`/api/competitors/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-    });
-    if (!response.ok) {
-      setError(await errorMessage(response));
-      return;
-    }
-    await load();
+    const ok = await send(`/api/competitors/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (ok) await load();
   }
 
   return (

@@ -5,15 +5,21 @@ import { z } from 'zod';
 import { competitors } from '../db/schema.js';
 import type { SourceClient } from '../source/client.js';
 
-const addBodySchema = z.object({
-  id: z
-    .string()
-    .min(1)
-    .max(100)
-    .regex(/^[A-Za-z0-9._-]+$/, 'letters, digits, ".", "_" and "-" only'),
-});
+const competitorId = z
+  .string()
+  .min(1)
+  .max(100)
+  .regex(/^[A-Za-z0-9._-]+$/, 'letters, digits, ".", "_" and "-" only');
 
-const idParamsSchema = z.object({ id: z.string().min(1).max(100) });
+const addBodySchema = z.object({ id: competitorId });
+const idParamsSchema = z.object({ id: competitorId });
+
+function invalidRequest(error: z.ZodError) {
+  return {
+    error: 'invalid_request',
+    message: error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '),
+  };
+}
 
 export function registerCompetitorRoutes(
   app: FastifyInstance,
@@ -31,12 +37,7 @@ export function registerCompetitorRoutes(
   app.post('/api/competitors', async (request, reply) => {
     const body = addBodySchema.safeParse(request.body);
     if (!body.success) {
-      return reply.code(400).send({
-        error: 'invalid_request',
-        message: body.error.issues
-          .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
-          .join('; '),
-      });
+      return reply.code(400).send(invalidRequest(body.error));
     }
     const { id } = body.data;
 
@@ -64,12 +65,15 @@ export function registerCompetitorRoutes(
     await db
       .insert(competitors)
       .values({ id, awaitingFirstPollReason })
-      .onConflictDoUpdate({ target: competitors.id, set: { removedAt: null } });
+      // A concurrent add of the same id wins; this one must not undo a removal that followed it.
+      .onConflictDoNothing();
     return reply.code(201).send({ id, awaitingFirstPollReason });
   });
 
   app.delete('/api/competitors/:id', async (request, reply) => {
-    const { id } = idParamsSchema.parse(request.params);
+    const params = idParamsSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send(invalidRequest(params.error));
+    const { id } = params.data;
     const [row] = await db
       .select({ id: competitors.id })
       .from(competitors)
