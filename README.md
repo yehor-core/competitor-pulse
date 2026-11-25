@@ -186,6 +186,20 @@ Claude Code (Anthropic) was used for planning, writing code and tests, and this 
 
 The assistant first proposed reserving an LLM slot before the call and **never giving it back**, as the simplest way to keep the cap hard. The user asked what happens when the call never left the process, for example when the connection is refused or the request could not be built. That would burn a slot for nothing. Decision: give the slot back **only when the request provably did not leave**, and keep it after a timeout, a `5xx`, or unusable output, where the provider may already have billed it. A crash between reservation and call still loses one slot, which stays on the safe side.
 
+## Monitoring
+
+The backend exposes Prometheus metrics at `GET /metrics` (port 3000; the frontend proxy forwards only `/api`, so it is not reachable through the UI). `docker compose up` also starts Prometheus (<http://localhost:9090>, scrapes the backend every 15 s) and Grafana (<http://localhost:3001>, login `admin` and the password `GRAFANA_ADMIN_PASSWORD`, default `admin`). The Prometheus data source and the **CompetitorPulse** dashboard are provisioned from `monitoring/`; nothing to set up by hand.
+
+| Panel                       | Metric                                                                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Poll lag                    | `competitor_pulse_poll_lag_seconds` (read from the database at scrape time)                                                                   |
+| Poll status counts          | `competitor_pulse_polls_total{poll_status}`                                                                                                   |
+| Source response codes       | `competitor_pulse_source_responses_total{outcome}`: the HTTP status, or `timeout`, `unreachable`, `unusable`                                  |
+| LLM calls by Summary status | `competitor_pulse_llm_calls_total{summary_status}`: counts every settled Summary, so `budget_exhausted` is shown too although it made no call |
+| Remaining Daily LLM budget  | `competitor_pulse_llm_budget_remaining` (read from Postgres, so it survives restarts); the gauge maximum is 2000, the default cap             |
+
+Counters restart from zero when the backend restarts; the panels use `increase()`, which handles that. In production (`docker-compose.prod.yml`) Prometheus is not published and Grafana listens on the server's `127.0.0.1:3001` only; `GRAFANA_ADMIN_PASSWORD` must be set. Open it with `ssh -L 3001:127.0.0.1:3001 <server>` and then <http://localhost:3001>.
+
 ## Deploy to a VPS
 
 Status: **not deployed yet.** The procedure below is what the files in this repository are set up for; it has not been run on a real server, and the override was only checked with `docker compose config` (it shows that only Caddy publishes ports); `docker compose up` was not run with it. Fill in the live link at the top of this file after the first deployment.
@@ -202,6 +216,8 @@ The production setup is the normal compose file plus `docker-compose.prod.yml`, 
 
    ```sh
    SITE_ADDRESS=203-0-113-7.sslip.io
+   # Required: Grafana's admin password (the compose file refuses to start without it).
+   GRAFANA_ADMIN_PASSWORD=change-me
    # Optional: a real LLM instead of the mock (see "Which LLM is used"), and the interval.
    # LLM_BASE_URL=https://api.openai.com/v1
    # LLM_API_KEY=...
