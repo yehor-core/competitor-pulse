@@ -73,14 +73,23 @@ async function openTimeline(page: Page, competitorId: string): Promise<void> {
   await expect(page.getByRole('heading', { name: competitorId })).toBeVisible();
 }
 
+// A removed Competitor keeps its Snapshots, so the list can already say "changed" from an earlier
+// scenario. The Summary is written after the Snapshot, so reopen the timeline until it shows.
+async function expectTimelineToShow(page: Page, competitorId: string, text: string): Promise<void> {
+  await expect(async () => {
+    await page.goto('/');
+    await openTimeline(page, competitorId);
+    await expect(page.getByText(text)).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 60_000 });
+}
+
 test('a Change in the Source shows up in the timeline with its Summary', async ({
   page,
   request,
 }) => {
   await addAndWaitForFirstPoll(page, id);
   await advanceUntilChanged(page, request, id);
-  await openTimeline(page, id);
-  await expect(page.getByText('Mock AI summary')).toBeVisible();
+  await expectTimelineToShow(page, id, 'Mock AI summary');
 });
 
 test('when the LLM fails the timeline still shows the Change and says why there is no Summary', async ({
@@ -90,10 +99,11 @@ test('when the LLM fails the timeline still shows the Change and says why there 
   await failNextLlmCalls(request, 1000);
   await addAndWaitForFirstPoll(page, id);
   await advanceUntilChanged(page, request, id);
-  await openTimeline(page, id);
-  await expect(
-    page.getByText('Summary not available: the language model could not be reached'),
-  ).toBeVisible();
+  await expectTimelineToShow(
+    page,
+    id,
+    'Summary not available: the language model could not be reached',
+  );
 });
 
 test('an id the Source does not know is rejected', async ({ page }) => {
