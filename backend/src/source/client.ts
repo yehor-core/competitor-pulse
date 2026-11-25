@@ -23,9 +23,15 @@ export interface SourceClient {
 export interface SourceClientOptions {
   baseUrl: string;
   timeoutMs: number;
+  /** Told about every request's outcome: an HTTP status, or timeout, unreachable, unusable. */
+  onResponse?: (outcome: string) => void;
 }
 
-export function createSourceClient({ baseUrl, timeoutMs }: SourceClientOptions): SourceClient {
+export function createSourceClient({
+  baseUrl,
+  timeoutMs,
+  onResponse,
+}: SourceClientOptions): SourceClient {
   const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
 
   async function fetchListing(id: string): Promise<ListingFetch> {
@@ -35,10 +41,13 @@ export function createSourceClient({ baseUrl, timeoutMs }: SourceClientOptions):
       response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
     } catch (error) {
       if (error instanceof DOMException && error.name === 'TimeoutError') {
+        onResponse?.('timeout');
         return { kind: 'unavailable', reason: `source timed out after ${String(timeoutMs)} ms` };
       }
+      onResponse?.('unreachable');
       return { kind: 'unavailable', reason: 'source is unreachable' };
     }
+    onResponse?.(String(response.status));
 
     if (response.status === 404) {
       await response.body?.cancel();
@@ -65,8 +74,10 @@ export function createSourceClient({ baseUrl, timeoutMs }: SourceClientOptions):
       // Covers a body that is not JSON, one that is not an object, and a connection cut mid-body.
       // The body read is covered by the same timeout signal, so a stalled body ends up here too.
       if (error instanceof DOMException && error.name === 'TimeoutError') {
+        onResponse?.('timeout');
         return { kind: 'unavailable', reason: `source timed out after ${String(timeoutMs)} ms` };
       }
+      onResponse?.('unusable');
       return { kind: 'unavailable', reason: 'source returned an unusable response' };
     }
   }

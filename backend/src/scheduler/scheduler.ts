@@ -18,6 +18,8 @@ export interface SchedulerOptions {
   /** How many more requests the Rate limit allows right now; a Poll is claimed only when one is free. */
   budget: { available(): number };
   /** Called once the Snapshot of a Change that needs a Summary is committed; must not throw or block. */
+  /** Called once per finished Poll with its Poll status. */
+  onPollFinished?: (pollStatus: string) => void;
   onChangePending?: (snapshotId: number) => void;
 }
 
@@ -109,6 +111,7 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
       return comparison.summaryStatus === 'pending' ? saved?.id : undefined;
     });
     // After the commit, so the Summary can never be written for a Snapshot that was not stored.
+    options.onPollFinished?.(outcome.pollStatus);
     if (snapshotId !== undefined) options.onChangePending?.(snapshotId);
     log.info(
       { competitorId: id, pollStatus: outcome.pollStatus, failureReason: outcome.failureReason },

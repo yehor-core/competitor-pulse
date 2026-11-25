@@ -13,6 +13,8 @@ export interface SummaryWorkerOptions {
   llm: LlmClient;
   budget: LlmBudget;
   log: FastifyBaseLogger;
+  /** Called with each Summary status a Change settles on. */
+  onSettled?: (summaryStatus: string) => void;
 }
 
 export interface SummaryWorker {
@@ -36,7 +38,13 @@ function promptListingOf(row: SnapshotRow): PromptListing | null {
   return { title, tagline, price, description };
 }
 
-export function createSummaryWorker({ db, llm, budget, log }: SummaryWorkerOptions): SummaryWorker {
+export function createSummaryWorker({
+  db,
+  llm,
+  budget,
+  log,
+  onSettled,
+}: SummaryWorkerOptions): SummaryWorker {
   const running = new Set<Promise<void>>();
 
   async function baselineOf(row: SnapshotRow): Promise<SnapshotRow | undefined> {
@@ -65,6 +73,7 @@ export function createSummaryWorker({ db, llm, budget, log }: SummaryWorkerOptio
       .update(snapshots)
       .set({ summary, summaryStatus })
       .where(and(eq(snapshots.id, row.id), eq(snapshots.summaryStatus, 'pending')));
+    onSettled?.(summaryStatus);
   }
 
   async function summarize(snapshotId: number): Promise<void> {

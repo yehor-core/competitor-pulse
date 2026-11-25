@@ -5,6 +5,7 @@ import { loadConfigOrExit } from './config.js';
 import { createTokenBucket } from './domain/token-bucket.js';
 import { createLlmBudget } from './llm/budget.js';
 import { createLlmClient } from './llm/client.js';
+import { createMetrics } from './metrics/metrics.js';
 import { createSummaryWorker } from './summaries/worker.js';
 import { createScheduler } from './scheduler/scheduler.js';
 import { createSourceClient } from './source/client.js';
@@ -18,17 +19,22 @@ const bucket = createTokenBucket({
   capacity: 1,
   now: Date.now,
 });
-const source = rateLimitSource(
-  createSourceClient({ baseUrl: config.sourceBaseUrl, timeoutMs: config.sourceTimeoutMs }),
-  bucket,
-);
 const db = drizzle(pool);
 const budget = createLlmBudget({
   db,
   policy: { dailyCap: config.llmDailyCap, windowsPerDay: config.llmBudgetWindowsPerDay },
   now: () => new Date(),
 });
-const app = buildApp(config, pool, source, budget);
+const metrics = createMetrics({ db, budget });
+const source = rateLimitSource(
+  createSourceClient({
+    baseUrl: config.sourceBaseUrl,
+    timeoutMs: config.sourceTimeoutMs,
+    onResponse: metrics.sourceResponse,
+  }),
+  bucket,
+);
+const app = buildApp(config, pool, source, budget, metrics);
 const summaries = createSummaryWorker({
   db,
   llm: createLlmClient({
@@ -39,6 +45,7 @@ const summaries = createSummaryWorker({
   }),
   budget,
   log: app.log,
+  onSettled: metrics.summarySettled,
 });
 const scheduler = createScheduler({
   db,
@@ -47,6 +54,7 @@ const scheduler = createScheduler({
   },
   source,
   log: app.log,
+  onPollFinished: metrics.pollFinished,
   intervalSeconds: config.pollIntervalSeconds,
   tickMs: config.schedulerTickMs,
   maxInFlight: config.pollMaxInFlight,
