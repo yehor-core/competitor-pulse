@@ -2,6 +2,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type pg from 'pg';
 import { registerCompetitorRoutes } from './competitors/routes.js';
+import { registerSnapshotRoutes } from './snapshots/routes.js';
 import type { Config } from './config.js';
 import type { SourceClient } from './source/client.js';
 
@@ -22,7 +23,9 @@ export function buildApp(
     }
   });
 
-  registerCompetitorRoutes(app, drizzle(pool), source);
+  const db = drizzle(pool);
+  registerCompetitorRoutes(app, db, source);
+  registerSnapshotRoutes(app, db);
 
   return app;
 }

@@ -33,7 +33,7 @@ describe.skipIf(!enabled)('competitors API', () => {
   });
 
   beforeEach(async () => {
-    await pool.query('truncate competitors');
+    await pool.query('truncate snapshots, competitors cascade');
     await source.configure({ failNext: 0, timeoutNext: 0 });
   });
 

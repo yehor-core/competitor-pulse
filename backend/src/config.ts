@@ -12,6 +12,8 @@ const envSchema = z.object({
   LLM_API_KEY: z.string().min(1),
   LLM_MODEL: z.string().min(1),
   POLL_INTERVAL_SECONDS: z.coerce.number().int().positive(),
+  SCHEDULER_TICK_MS: z.coerce.number().int().positive().default(1000),
+  POLL_MAX_IN_FLIGHT: z.coerce.number().int().positive().default(4),
 });
 
 export interface Config {
@@ -24,6 +26,8 @@ export interface Config {
   llmApiKey: string;
   llmModel: string;
   pollIntervalSeconds: number;
+  schedulerTickMs: number;
+  pollMaxInFlight: number;
 }
 
 export class ConfigError extends Error {
@@ -64,5 +68,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     llmApiKey: values.LLM_API_KEY,
     llmModel: values.LLM_MODEL,
     pollIntervalSeconds: values.POLL_INTERVAL_SECONDS,
+    schedulerTickMs: values.SCHEDULER_TICK_MS,
+    pollMaxInFlight: values.POLL_MAX_IN_FLIGHT,
   };
 }
