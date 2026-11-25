@@ -45,7 +45,7 @@ New schema change: edit `backend/src/db/schema.ts`, then `npm run db:generate -w
 
 ```sh
 npm run format:check && npm run lint && npm run typecheck
-npm test                                  # unit and integration tests
+npm test                                  # unit and integration tests (backend and frontend)
 npm run test:e2e                          # Playwright, see below
 ```
 
@@ -125,7 +125,7 @@ GET    /api/competitors/:id/snapshots    -> [Snapshot, ...]   newest first
 GET    /api/health                       -> { status, pollLagSeconds, llmBudget }
 ```
 
-A Snapshot has the fields of the brief plus `pollStatus` (`ok`, `failed`, `incomplete`, `delisted`), `summaryStatus` (table above), `failureReason`, and `priceParts` (amount, currency, period). The UI turns `summaryStatus` and `failureReason` into a sentence, so it always tells the user why a summary is missing.
+A Snapshot has the fields of the brief plus `pollStatus` (`ok`, `failed`, `incomplete`, `delisted`), `summaryStatus` (table above), `failureReason`, and `priceParts` (amount, currency, period). The UI turns `summaryStatus` and `failureReason` into a sentence, so it always tells the user why a summary is missing. Every Snapshot gets such a line: the first one says there is nothing to compare yet, an unchanged Poll says "No change", and a failed or incomplete Poll shows its stored reason. Both views refresh themselves every 30 seconds.
 
 ## How the production numbers are handled
 
@@ -135,7 +135,7 @@ The brief asks for 6,000 Competitors polled every 15 minutes, a source limit of 
 
 - A token bucket holds the request rate at `SOURCE_REQUESTS_PER_SECOND` (default **4**), leaving headroom below 5 for `429` answers and for the source counting differently from us. Every source request goes through it.
 - At 4 requests per second, one pass over 6,000 Competitors takes 1,500 seconds, so the **effective interval is about 25 minutes**, not 15. `POLL_INTERVAL_SECONDS` is the target; the real interval is the larger of the target and what the rate allows.
-- The scheduler ticks every second and takes the Competitors whose `next_poll_at` is in the past, **most overdue first**, up to `POLL_MAX_IN_FLIGHT`. `next_poll_at` lives in Postgres, so a restart loses nothing.
+- The scheduler ticks every second and takes the Competitors whose `next_poll_at` is in the past, **most overdue first**, up to `POLL_MAX_IN_FLIGHT`. The rows are claimed with `SELECT ... FOR UPDATE SKIP LOCKED`, and `next_poll_at` is moved forward in the same transaction, so two claimers never take the same Competitor. `next_poll_at` lives in Postgres, so a restart loses nothing.
 - On `429` the whole scheduler pauses for the `Retry-After` time, because the limit is global.
 - **Poll lag** (how overdue the most overdue Competitor is) is exposed in `GET /api/health`, so the stretch is visible.
 - Not built, only described: adaptive intervals (poll rarely changing Competitors less often), asking the source owner for a higher limit, and sharding the Competitors across several backend instances behind one shared rate budget.
@@ -172,11 +172,10 @@ The brief asks for 6,000 Competitors polled every 15 minutes, a source limit of 
 - Adaptive polling intervals, sharding, and more than one backend instance.
 - Per-Competitor backoff and fast retry after a failed Poll.
 - Backfilling summaries that were skipped because of the budget or a failed LLM call.
-- Automatic refresh of the UI: it loads data when a view opens; reload to see new Polls.
+- Push updates to the UI (WebSocket or server-sent events): both views re-fetch every 30 seconds instead.
 - Authentication (the brief says one internal user), pagination of the timeline, and any styling.
 - Manual "poll now" endpoint.
 - LLM prompt tuning: with the mock LLM the text cannot be judged, so the prompt is a plain statement of the old and new listing.
-- Metrics and dashboards: only structured logs and `GET /api/health` exist.
 
 ## AI tools used
 
