@@ -9,7 +9,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
 // The health check never touches the Source.
 const unusedSource = createSourceClient({ baseUrl: 'http://127.0.0.1:1', timeoutMs: 100 });
 
-describe('GET /health', () => {
+describe.each(['/health', '/api/health'])('GET %s', (url) => {
   const pools: pg.Pool[] = [];
   afterAll(async () => {
     await Promise.all(pools.map((pool) => pool.end()));
@@ -22,10 +22,10 @@ describe('GET /health', () => {
       pools.push(pool);
       const app = buildApp({ logLevel: 'silent' }, pool, unusedSource);
 
-      const response = await app.inject({ method: 'GET', url: '/health' });
+      const response = await app.inject({ method: 'GET', url });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ status: 'ok' });
+      expect(response.json()).toEqual({ status: 'ok', pollLagSeconds: 0 });
     },
   );
 
@@ -37,7 +37,7 @@ describe('GET /health', () => {
     pools.push(pool);
     const app = buildApp({ logLevel: 'silent' }, pool, unusedSource);
 
-    const response = await app.inject({ method: 'GET', url: '/health' });
+    const response = await app.inject({ method: 'GET', url });
 
     expect(response.statusCode).toBe(503);
     expect(response.json()).toEqual({ status: 'unavailable', reason: 'database unreachable' });

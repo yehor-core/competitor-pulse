@@ -8,6 +8,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   SOURCE_BASE_URL: httpUrl,
   SOURCE_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+  SOURCE_REQUESTS_PER_SECOND: z.coerce.number().positive().default(4),
   LLM_BASE_URL: httpUrl,
   LLM_API_KEY: z.string().min(1),
   LLM_MODEL: z.string().min(1),
@@ -22,6 +23,7 @@ export interface Config {
   databaseUrl: string;
   sourceBaseUrl: string;
   sourceTimeoutMs: number;
+  sourceRequestsPerSecond: number;
   llmBaseUrl: string;
   llmApiKey: string;
   llmModel: string;
@@ -64,6 +66,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     databaseUrl: values.DATABASE_URL,
     sourceBaseUrl: values.SOURCE_BASE_URL,
     sourceTimeoutMs: values.SOURCE_TIMEOUT_MS,
+    sourceRequestsPerSecond: values.SOURCE_REQUESTS_PER_SECOND,
     llmBaseUrl: values.LLM_BASE_URL,
     llmApiKey: values.LLM_API_KEY,
     llmModel: values.LLM_MODEL,

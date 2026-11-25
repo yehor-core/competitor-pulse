@@ -8,12 +8,19 @@ const serverPath = fileURLToPath(
   new URL('../../../files/listing-source/listing-source-server.mjs', import.meta.url),
 );
 
-const statsSchema = z.object({ versions: z.record(z.string(), z.unknown()) });
+const statsSchema = z.object({
+  versions: z.record(z.string(), z.unknown()),
+  byStatus: z.record(z.string(), z.number()),
+});
 
 export interface RunningSource {
   baseUrl: string;
   /** An id the Source knows, discovered over HTTP so tests do not depend on fixture content. */
   knownId: string;
+  /** Every id the Source knows. */
+  knownIds: string[];
+  /** Requests the Source has answered so far, by HTTP status. */
+  requestsByStatus(): Promise<Record<string, number>>;
   configure(settings: Record<string, unknown>): Promise<void>;
   stop(): Promise<void>;
 }
@@ -69,12 +76,16 @@ export async function startSource(): Promise<RunningSource> {
   });
 
   const stats = statsSchema.parse(await (await fetch(`${baseUrl}/control/stats`)).json());
-  const knownId = Object.keys(stats.versions)[0];
+  const knownIds = Object.keys(stats.versions);
+  const knownId = knownIds[0];
   if (knownId === undefined) throw new Error('listing source knows no competitors');
 
   return {
     baseUrl,
     knownId,
+    knownIds,
+    requestsByStatus: async () =>
+      statsSchema.parse(await (await fetch(`${baseUrl}/control/stats`)).json()).byStatus,
     configure: (settings) => post('/control/configure', settings),
     stop: async () => {
       child.kill();

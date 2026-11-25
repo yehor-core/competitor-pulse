@@ -4,6 +4,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { competitors, snapshots } from '../db/schema.js';
 import { outcomeOf } from '../snapshots/model.js';
 import type { SourceClient } from '../source/client.js';
+import { pollLagSeconds } from './poll-lag.js';
 
 export interface SchedulerOptions {
   db: NodePgDatabase;
@@ -11,7 +12,10 @@ export interface SchedulerOptions {
   log: FastifyBaseLogger;
   intervalSeconds: number;
   tickMs: number;
+  /** Cap on Polls running at once, across ticks. */
   maxInFlight: number;
+  /** How many more requests the Rate limit allows right now; a Poll is claimed only when one is free. */
+  budget: { available(): number };
 }
 
 export interface Scheduler {
@@ -23,9 +27,10 @@ export interface Scheduler {
 }
 
 export function createScheduler(options: SchedulerOptions): Scheduler {
-  const { db, source, log, intervalSeconds, tickMs, maxInFlight } = options;
+  const { db, source, log, intervalSeconds, tickMs, maxInFlight, budget } = options;
   let timer: NodeJS.Timeout | undefined;
-  let running: Promise<void> = Promise.resolve();
+  let inFlight = 0;
+  const running = new Set<Promise<void>>();
 
   // The next Poll time is written in the same transaction that claims the row, so a crash after the claim
   // costs one Poll but never leaves a Competitor stuck, and concurrent claimers never take the same row.
@@ -72,8 +77,21 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
   }
 
   async function tick(): Promise<void> {
-    const ids = await claimDue(maxInFlight);
-    const results = await Promise.allSettled(ids.map((id) => poll(id)));
+    // In-flight slots are reserved before the claim awaits, so overlapping ticks cannot overshoot the cap.
+    const slots = Math.min(maxInFlight - inFlight, budget.available());
+    if (slots <= 0) return;
+    inFlight += slots;
+    let ids: string[] = [];
+    try {
+      const lag = await pollLagSeconds(db);
+      ids = await claimDue(slots);
+      if (lag > 0) log.info({ pollLagSeconds: lag, claimed: ids.length }, 'polls are overdue');
+    } finally {
+      inFlight -= slots - ids.length;
+    }
+    const results = await Promise.allSettled(
+      ids.map((id) => poll(id).finally(() => (inFlight -= 1))),
+    );
     results.forEach((result, index) => {
       if (result.status === 'rejected') {
         log.error({ err: result.reason, competitorId: ids[index] }, 'poll could not be stored');
@@ -81,15 +99,16 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
     });
   }
 
+  // Ticks are not awaited by the timer: a slow Source must not stop other due Polls from starting.
   function schedule(): void {
     timer = setTimeout(() => {
-      running = tick()
+      const current = tick()
         .catch((error: unknown) => {
           log.error({ err: error }, 'scheduler tick failed');
         })
-        .then(() => {
-          if (timer !== undefined) schedule();
-        });
+        .finally(() => running.delete(current));
+      running.add(current);
+      if (timer !== undefined) schedule();
     }, tickMs);
   }
 
@@ -101,7 +120,7 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
     async stop() {
       if (timer !== undefined) clearTimeout(timer);
       timer = undefined;
-      await running;
+      await Promise.all(running);
     },
   };
 }
