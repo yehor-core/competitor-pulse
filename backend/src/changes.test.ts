@@ -56,6 +56,7 @@ describe.skipIf(!enabled)('change detection', () => {
       intervalSeconds: 3600,
       tickMs: 1000,
       maxInFlight: 4,
+      budget: { available: () => 1000 },
     });
 
   async function pollOnce(baseUrl = stub.baseUrl): Promise<void> {
