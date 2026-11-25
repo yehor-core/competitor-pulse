@@ -36,6 +36,12 @@ describe('loadConfig', () => {
     );
   });
 
+  it('defaults the LLM timeout to 20 seconds and lets it be changed', () => {
+    expect(loadConfig(valid).llmTimeoutMs).toBe(20_000);
+    expect(loadConfig({ ...valid, LLM_TIMEOUT_MS: '5000' }).llmTimeoutMs).toBe(5000);
+    expect(() => loadConfig({ ...valid, LLM_TIMEOUT_MS: '0' })).toThrow(/LLM_TIMEOUT_MS/);
+  });
+
   it('names every missing variable in one error', () => {
     const { DATABASE_URL: _db, SOURCE_BASE_URL: _src, ...rest } = valid;
 
