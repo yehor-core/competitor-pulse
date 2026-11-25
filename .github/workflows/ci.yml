@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: competitor_pulse
+          POSTGRES_PASSWORD: competitor_pulse
+          POSTGRES_DB: competitor_pulse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U competitor_pulse"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      DATABASE_URL: postgres://competitor_pulse:competitor_pulse@localhost:5432/competitor_pulse
+      TEST_DATABASE_URL: postgres://competitor_pulse:competitor_pulse@localhost:5432/competitor_pulse
+      SOURCE_BASE_URL: http://localhost:4002
+      LLM_BASE_URL: http://localhost:4001/v1
+      LLM_API_KEY: mock-key
+      LLM_MODEL: mock-llm
+      POLL_INTERVAL_SECONDS: '900'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: Migrations apply on a clean database
+        run: npm run migrate -w backend
+      - run: npm test
+
+  compose-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose build
