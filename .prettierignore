@@ -1,0 +1,7 @@
+files
+node_modules
+dist
+backend/drizzle
+package-lock.json
+.scratch
+instructions.md
