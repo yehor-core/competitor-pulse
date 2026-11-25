@@ -1,0 +1,109 @@
+{
+  "uid": "competitor-pulse",
+  "title": "CompetitorPulse",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-1h", "to": "now" },
+  "tags": ["competitor-pulse"],
+  "editable": true,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Poll lag",
+      "description": "Seconds the most overdue Competitor has waited for its Poll. 0 means none is overdue.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "competitor_pulse_poll_lag_seconds",
+          "legendFormat": "lag"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Poll status counts",
+      "description": "Finished Polls in the last 5 minutes by Poll status.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (poll_status) (increase(competitor_pulse_polls_total[5m]))",
+          "legendFormat": "{{poll_status}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Source response codes",
+      "description": "Requests to the Source in the last 5 minutes by HTTP status, or timeout, unreachable, unusable.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (outcome) (increase(competitor_pulse_source_responses_total[5m]))",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "LLM calls by Summary status",
+      "description": "Settled Summaries in the last hour by Summary status.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (summary_status) (increase(competitor_pulse_llm_calls_total[1h]))",
+          "legendFormat": "{{summary_status}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Remaining Daily LLM budget",
+      "description": "LLM calls left today (UTC).",
+      "type": "gauge",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 2000,
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 200 },
+              { "color": "green", "value": 600 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "competitor_pulse_llm_budget_remaining",
+          "legendFormat": "remaining"
+        }
+      ]
+    }
+  ]
+}

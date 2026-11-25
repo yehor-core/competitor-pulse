@@ -26,6 +26,33 @@ describe('loadConfig', () => {
     });
   });
 
+  it('defaults the Source request rate to 4 per second and lets it be changed', () => {
+    expect(loadConfig(valid).sourceRequestsPerSecond).toBe(4);
+    expect(
+      loadConfig({ ...valid, SOURCE_REQUESTS_PER_SECOND: '2.5' }).sourceRequestsPerSecond,
+    ).toBe(2.5);
+    expect(() => loadConfig({ ...valid, SOURCE_REQUESTS_PER_SECOND: '0' })).toThrow(
+      /SOURCE_REQUESTS_PER_SECOND/,
+    );
+  });
+
+  it('defaults the Daily LLM budget to 2000 calls spread over 24 hourly windows', () => {
+    expect(loadConfig(valid)).toMatchObject({ llmDailyCap: 2000, llmBudgetWindowsPerDay: 24 });
+    expect(
+      loadConfig({ ...valid, LLM_DAILY_CAP: '50', LLM_BUDGET_WINDOWS_PER_DAY: '1' }),
+    ).toMatchObject({ llmDailyCap: 50, llmBudgetWindowsPerDay: 1 });
+    expect(() => loadConfig({ ...valid, LLM_BUDGET_WINDOWS_PER_DAY: '0' })).toThrow(
+      /LLM_BUDGET_WINDOWS_PER_DAY/,
+    );
+    expect(() => loadConfig({ ...valid, LLM_DAILY_CAP: '-1' })).toThrow(/LLM_DAILY_CAP/);
+  });
+
+  it('defaults the LLM timeout to 20 seconds and lets it be changed', () => {
+    expect(loadConfig(valid).llmTimeoutMs).toBe(20_000);
+    expect(loadConfig({ ...valid, LLM_TIMEOUT_MS: '5000' }).llmTimeoutMs).toBe(5000);
+    expect(() => loadConfig({ ...valid, LLM_TIMEOUT_MS: '0' })).toThrow(/LLM_TIMEOUT_MS/);
+  });
+
   it('names every missing variable in one error', () => {
     const { DATABASE_URL: _db, SOURCE_BASE_URL: _src, ...rest } = valid;
 

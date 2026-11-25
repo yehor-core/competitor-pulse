@@ -8,10 +8,16 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   SOURCE_BASE_URL: httpUrl,
   SOURCE_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+  SOURCE_REQUESTS_PER_SECOND: z.coerce.number().positive().default(4),
   LLM_BASE_URL: httpUrl,
   LLM_API_KEY: z.string().min(1),
   LLM_MODEL: z.string().min(1),
+  LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+  LLM_DAILY_CAP: z.coerce.number().int().min(0).default(2000),
+  LLM_BUDGET_WINDOWS_PER_DAY: z.coerce.number().int().min(1).max(1440).default(24),
   POLL_INTERVAL_SECONDS: z.coerce.number().int().positive(),
+  SCHEDULER_TICK_MS: z.coerce.number().int().positive().default(1000),
+  POLL_MAX_IN_FLIGHT: z.coerce.number().int().positive().default(4),
 });
 
 export interface Config {
@@ -20,10 +26,16 @@ export interface Config {
   databaseUrl: string;
   sourceBaseUrl: string;
   sourceTimeoutMs: number;
+  sourceRequestsPerSecond: number;
   llmBaseUrl: string;
   llmApiKey: string;
   llmModel: string;
+  llmTimeoutMs: number;
+  llmDailyCap: number;
+  llmBudgetWindowsPerDay: number;
   pollIntervalSeconds: number;
+  schedulerTickMs: number;
+  pollMaxInFlight: number;
 }
 
 export class ConfigError extends Error {
@@ -60,9 +72,15 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     databaseUrl: values.DATABASE_URL,
     sourceBaseUrl: values.SOURCE_BASE_URL,
     sourceTimeoutMs: values.SOURCE_TIMEOUT_MS,
+    sourceRequestsPerSecond: values.SOURCE_REQUESTS_PER_SECOND,
     llmBaseUrl: values.LLM_BASE_URL,
     llmApiKey: values.LLM_API_KEY,
     llmModel: values.LLM_MODEL,
+    llmTimeoutMs: values.LLM_TIMEOUT_MS,
+    llmDailyCap: values.LLM_DAILY_CAP,
+    llmBudgetWindowsPerDay: values.LLM_BUDGET_WINDOWS_PER_DAY,
     pollIntervalSeconds: values.POLL_INTERVAL_SECONDS,
+    schedulerTickMs: values.SCHEDULER_TICK_MS,
+    pollMaxInFlight: values.POLL_MAX_IN_FLIGHT,
   };
 }

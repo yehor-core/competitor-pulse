@@ -4,8 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "typecheck": "tsc --noEmit"
+    "build": "tsc --noEmit -p tsconfig.build.json && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@types/react": "^19.3.2",

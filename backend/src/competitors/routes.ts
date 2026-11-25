@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -21,17 +21,44 @@ function invalidRequest(error: z.ZodError) {
   };
 }
 
+// Raw SQL subselects come back from pg as strings or Dates depending on the driver path.
+function toIso(value: Date | string | null): string | null {
+  return value === null ? null : new Date(value).toISOString();
+}
+
 export function registerCompetitorRoutes(
   app: FastifyInstance,
   db: NodePgDatabase,
   source: SourceClient,
 ): void {
   app.get('/api/competitors', async () => {
-    return db
-      .select({ id: competitors.id, awaitingFirstPollReason: competitors.awaitingFirstPollReason })
+    const rows = await db
+      .select({
+        id: competitors.id,
+        awaitingFirstPollReason: competitors.awaitingFirstPollReason,
+        lastChangedAt: sql<Date | null>`(
+          select max(s.fetched_at) from snapshots s
+          where s.competitor_id = competitors.id and s.changed
+        )`,
+        lastPolledAt: sql<Date | null>`(
+          select max(s.fetched_at) from snapshots s where s.competitor_id = competitors.id
+        )`,
+        lastPollStatus: sql<string | null>`(
+          select s.poll_status from snapshots s where s.competitor_id = competitors.id
+          order by s.fetched_at desc, s.id desc limit 1
+        )`,
+      })
       .from(competitors)
       .where(isNull(competitors.removedAt))
       .orderBy(asc(competitors.id));
+    const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    return rows.map((row) => ({
+      ...row,
+      lastChangedAt: toIso(row.lastChangedAt),
+      lastPolledAt: toIso(row.lastPolledAt),
+      changedInLast24h:
+        row.lastChangedAt !== null && new Date(row.lastChangedAt).getTime() >= dayAgo,
+    }));
   });
 
   app.post('/api/competitors', async (request, reply) => {

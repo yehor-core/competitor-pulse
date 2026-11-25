@@ -8,3 +8,6 @@ dist
 GLOSSARY.md
 docs/adr/
 docs/ai-log.md
+
+e2e/playwright-report
+e2e/test-results

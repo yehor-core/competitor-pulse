@@ -1,8 +1,18 @@
-import { useCallback, useEffect, useState, type SubmitEvent } from 'react';
+import { useCallback, useState, type SubmitEvent } from 'react';
+import { changedInLast24hLabel } from './summary-note';
+import { useAutoRefresh } from './useAutoRefresh';
 
 interface Competitor {
   id: string;
   awaitingFirstPollReason: string | null;
+  lastChangedAt: string | null;
+  changedInLast24h: boolean;
+  lastPolledAt: string | null;
+  lastPollStatus: 'ok' | 'failed' | 'incomplete' | 'delisted' | null;
+}
+
+function when(iso: string): string {
+  return new Date(iso).toLocaleString();
 }
 
 async function errorMessage(response: Response): Promise<string> {
@@ -17,7 +27,7 @@ async function errorMessage(response: Response): Promise<string> {
   return `Request failed with HTTP ${String(response.status)}`;
 }
 
-export function CompetitorList() {
+export function CompetitorList({ onOpen }: { onOpen: (id: string) => void }) {
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [newId, setNewId] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -33,9 +43,7 @@ export function CompetitorList() {
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useAutoRefresh(load);
 
   async function send(url: string, init: RequestInit): Promise<boolean> {
     try {
@@ -92,10 +100,29 @@ export function CompetitorList() {
         <ul>
           {competitors.map((competitor) => (
             <li key={competitor.id}>
-              {competitor.id}
+              <button
+                type="button"
+                onClick={() => {
+                  onOpen(competitor.id);
+                }}
+              >
+                {competitor.id}
+              </button>
               {competitor.awaitingFirstPollReason !== null && (
                 <span> (waiting for first poll: {competitor.awaitingFirstPollReason})</span>
-              )}{' '}
+              )}
+              {changedInLast24hLabel(competitor.changedInLast24h) !== null && (
+                <strong> {changedInLast24hLabel(competitor.changedInLast24h)}</strong>
+              )}
+              <span>
+                {' '}
+                - last change:{' '}
+                {competitor.lastChangedAt === null ? 'none yet' : when(competitor.lastChangedAt)};
+                last poll:{' '}
+                {competitor.lastPolledAt === null
+                  ? 'not polled yet'
+                  : `${when(competitor.lastPolledAt)} (${competitor.lastPollStatus ?? 'unknown'})`}
+              </span>{' '}
               <button
                 type="button"
                 onClick={() => {

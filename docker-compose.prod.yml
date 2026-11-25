@@ -1,0 +1,47 @@
+# Production override: run as `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`.
+# Caddy is the only service reachable from outside; it terminates HTTPS and forwards to the frontend.
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS to the hostname (or :80 for plain HTTP)}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+
+  # `!override` replaces the published ports of the base file, so these stay internal to the compose network.
+  postgres:
+    restart: unless-stopped
+    ports: !override []
+  listing-source:
+    restart: unless-stopped
+    ports: !override []
+  mock-llm:
+    restart: unless-stopped
+    ports: !override []
+  backend:
+    restart: unless-stopped
+    ports: !override []
+  frontend:
+    restart: unless-stopped
+    ports: !override []
+  # Prometheus stays internal; Grafana listens on the server's loopback only. Reach it through an SSH tunnel (see "Monitoring" in README.md).
+  prometheus:
+    restart: unless-stopped
+    ports: !override []
+  grafana:
+    restart: unless-stopped
+    ports: !override ['127.0.0.1:3001:3000']
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD to a non-default password}
+
+volumes:
+  caddy_data:
+  caddy_config:

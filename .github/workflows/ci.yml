@@ -49,3 +49,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker compose build
+
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      # Short enough that a scenario sees a poll within seconds.
+      POLL_INTERVAL_SECONDS: '3'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: docker compose up --build --detach
+      - name: Wait for the system to be healthy
+        run: |
+          for url in http://localhost:8080/ http://localhost:8080/api/competitors http://localhost:4002/health; do
+            timeout 120 sh -c "until curl --fail --silent $url > /dev/null; do sleep 2; done"
+          done
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Show service logs
+        if: failure()
+        run: docker compose logs --no-color
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+      - run: docker compose down --volumes
+        if: always()
