@@ -1,8 +1,9 @@
-import { and, asc, eq, isNull, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { FastifyBaseLogger } from 'fastify';
 import { competitors, snapshots } from '../db/schema.js';
-import { outcomeOf } from '../snapshots/model.js';
+import { compareWithBaseline } from '../domain/compare.js';
+import { comparableOf, outcomeOf } from '../snapshots/model.js';
 import type { SourceClient } from '../source/client.js';
 
 export interface SchedulerOptions {
@@ -53,12 +54,43 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
     const fetchedAt = new Date();
     const outcome = outcomeOf(await source.fetchListing(id));
     await db.transaction(async (tx) => {
+      // Failed and incomplete Snapshots hold no listing, so only ok and delisted Snapshots say what came before.
+      const [lastKnown] = await tx
+        .select()
+        .from(snapshots)
+        .where(
+          and(eq(snapshots.competitorId, id), inArray(snapshots.pollStatus, ['ok', 'delisted'])),
+        )
+        .orderBy(desc(snapshots.fetchedAt), desc(snapshots.id))
+        .limit(1);
+      const [lastOk] =
+        lastKnown?.pollStatus === 'ok'
+          ? [lastKnown]
+          : await tx
+              .select()
+              .from(snapshots)
+              .where(and(eq(snapshots.competitorId, id), eq(snapshots.pollStatus, 'ok')))
+              .orderBy(desc(snapshots.fetchedAt), desc(snapshots.id))
+              .limit(1);
+      const comparison = compareWithBaseline(
+        {
+          baseline: lastOk ? comparableOf(lastOk) : null,
+          wasDelisted: lastKnown?.pollStatus === 'delisted',
+        },
+        {
+          pollStatus: outcome.pollStatus,
+          listing: outcome.listing && comparableOf(outcome.listing),
+        },
+      );
       await tx.insert(snapshots).values({
         competitorId: id,
         fetchedAt,
         pollStatus: outcome.pollStatus,
         failureReason: outcome.failureReason,
         ...outcome.listing,
+        changed: comparison.changed,
+        summary: comparison.summary,
+        summaryStatus: comparison.summaryStatus,
       });
       await tx
         .update(competitors)

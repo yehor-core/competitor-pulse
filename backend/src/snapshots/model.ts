@@ -1,20 +1,49 @@
 import type { ListingFetch } from '../source/client.js';
-import { normalizeListing } from '../domain/normalize.js';
+import type { ComparableListing } from '../domain/compare.js';
+import { normalizeListing, type PricePeriod } from '../domain/normalize.js';
 
 export type PollStatus = 'ok' | 'failed' | 'incomplete' | 'delisted';
+
+/** The Normalized listing as stored on a Snapshot row. */
+export interface StoredListing {
+  title: string;
+  tagline: string;
+  price: string;
+  priceAmount: string;
+  priceCurrency: string | null;
+  pricePeriod: string | null;
+  description: string;
+}
 
 export interface PollOutcome {
   pollStatus: PollStatus;
   failureReason: string | null;
-  listing: {
-    title: string;
-    tagline: string;
-    price: string;
-    priceAmount: string;
-    priceCurrency: string | null;
-    pricePeriod: string | null;
-    description: string;
-  } | null;
+  listing: StoredListing | null;
+}
+
+/** Rebuilds the comparable fields from a stored row; null when the row holds no listing. */
+export function comparableOf(row: {
+  title: string | null;
+  tagline: string | null;
+  priceAmount: string | null;
+  priceCurrency: string | null;
+  pricePeriod: string | null;
+  description: string | null;
+}): ComparableListing | null {
+  const { title, tagline, priceAmount, description } = row;
+  if (title === null || tagline === null || priceAmount === null || description === null) {
+    return null;
+  }
+  return {
+    title,
+    tagline,
+    description,
+    priceParts: {
+      amount: Number(priceAmount),
+      currency: row.priceCurrency,
+      period: row.pricePeriod as PricePeriod | null,
+    },
+  };
 }
 
 /** Turns what the Source answered into the outcome of one Poll. */

@@ -15,6 +15,8 @@ export interface RunningSource {
   /** An id the Source knows, discovered over HTTP so tests do not depend on fixture content. */
   knownId: string;
   configure(settings: Record<string, unknown>): Promise<void>;
+  /** Moves one competitor to its next version, as the Source itself does on a timer. */
+  advance(id: string): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -76,6 +78,7 @@ export async function startSource(): Promise<RunningSource> {
     baseUrl,
     knownId,
     configure: (settings) => post('/control/configure', settings),
+    advance: (id) => post('/control/advance', { id, steps: 1 }),
     stop: async () => {
       child.kill();
       await once(child, 'exit');

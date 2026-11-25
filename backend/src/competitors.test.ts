@@ -9,6 +9,13 @@ import { startSource, type RunningSource } from './test-support/source.js';
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const enabled = Boolean(databaseUrl) || Boolean(process.env.CI);
 
+const neverPolled = {
+  lastChangedAt: null,
+  changedInLast24h: false,
+  lastPolledAt: null,
+  lastPollStatus: null,
+};
+
 describe.skipIf(!enabled)('competitors API', () => {
   let pool: pg.Pool;
   let source: RunningSource;
@@ -48,7 +55,9 @@ describe.skipIf(!enabled)('competitors API', () => {
     const listed = await server.inject({ method: 'GET', url: '/api/competitors' });
 
     expect(added.statusCode).toBe(201);
-    expect(listed.json()).toEqual([{ id: source.knownId, awaitingFirstPollReason: null }]);
+    expect(listed.json()).toEqual([
+      { ...neverPolled, id: source.knownId, awaitingFirstPollReason: null },
+    ]);
   });
 
   it('rejects an id the Source does not know with 422 and stores nothing', async () => {
@@ -90,7 +99,7 @@ describe.skipIf(!enabled)('competitors API', () => {
     expect(added.json<{ awaitingFirstPollReason: string }>().awaitingFirstPollReason).toContain(
       '5',
     );
-    expect(listed.json()).toEqual([added.json()]);
+    expect(listed.json()).toEqual([{ ...neverPolled, ...added.json() }]);
   });
 
   it('stores the competitor as waiting when the Source does not answer in time', async () => {
@@ -132,7 +141,9 @@ describe.skipIf(!enabled)('competitors API', () => {
     expect(removed.statusCode).toBe(204);
     expect(afterRemove.json()).toEqual([]);
     expect(readded.statusCode).toBe(201);
-    expect(afterReadd.json()).toEqual([{ id: source.knownId, awaitingFirstPollReason: null }]);
+    expect(afterReadd.json()).toEqual([
+      { ...neverPolled, id: source.knownId, awaitingFirstPollReason: null },
+    ]);
   });
 
   it('answers 404 when removing a competitor that was never tracked', async () => {
