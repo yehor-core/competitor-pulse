@@ -1,0 +1,6 @@
+# SITE_ADDRESS is a bare hostname for automatic HTTPS (for example 203-0-113-7.sslip.io),
+# or ":80" to serve plain HTTP on the IP. See "Deploy to a VPS" in README.md.
+{$SITE_ADDRESS} {
+	# The frontend container serves the UI and proxies /api to the backend.
+	reverse_proxy frontend:80
+}
