@@ -1,4 +1,2 @@
-CREATE TABLE "competitors" (
-	"id" text PRIMARY KEY NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
-);
+-- Baseline migration: the tables arrive with the tickets that need them.
+SELECT 1;
