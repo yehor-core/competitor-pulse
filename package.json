@@ -7,7 +7,8 @@
     "frontend"
   ],
   "scripts": {
-    "typecheck": "npm run typecheck --workspaces",
+    "typecheck": "npm run typecheck --workspaces && tsc --noEmit -p e2e",
+    "test:e2e": "playwright test -c e2e",
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "test": "npm run test --workspaces --if-present",
@@ -15,6 +16,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.65.1",
     "eslint": "^10.15.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.2",
