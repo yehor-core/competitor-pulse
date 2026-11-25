@@ -1,8 +1,15 @@
+import { drizzle } from 'drizzle-orm/node-postgres';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type pg from 'pg';
+import { registerCompetitorRoutes } from './competitors/routes.js';
 import type { Config } from './config.js';
+import type { SourceClient } from './source/client.js';
 
-export function buildApp(config: Pick<Config, 'logLevel'>, pool: pg.Pool): FastifyInstance {
+export function buildApp(
+  config: Pick<Config, 'logLevel'>,
+  pool: pg.Pool,
+  source: SourceClient,
+): FastifyInstance {
   const app = Fastify({ logger: { level: config.logLevel } });
 
   app.get('/health', async (request, reply) => {
@@ -14,6 +21,8 @@ export function buildApp(config: Pick<Config, 'logLevel'>, pool: pg.Pool): Fasti
       return reply.code(503).send({ status: 'unavailable', reason: 'database unreachable' });
     }
   });
+
+  registerCompetitorRoutes(app, drizzle(pool), source);
 
   return app;
 }

@@ -1,10 +1,15 @@
 import pg from 'pg';
 import { buildApp } from './app.js';
 import { loadConfigOrExit } from './config.js';
+import { createSourceClient } from './source/client.js';
 
 const config = loadConfigOrExit(process.env);
 const pool = new pg.Pool({ connectionString: config.databaseUrl });
-const app = buildApp(config, pool);
+const source = createSourceClient({
+  baseUrl: config.sourceBaseUrl,
+  timeoutMs: config.sourceTimeoutMs,
+});
+const app = buildApp(config, pool, source);
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {

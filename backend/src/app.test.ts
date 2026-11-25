@@ -1,9 +1,13 @@
 import pg from 'pg';
 import { afterAll, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
+import { createSourceClient } from './source/client.js';
 
 // Real Postgres, as the project rules require. CI provides it; locally use `docker compose up -d postgres`.
 const databaseUrl = process.env.TEST_DATABASE_URL;
+
+// The health check never touches the Source.
+const unusedSource = createSourceClient({ baseUrl: 'http://127.0.0.1:1', timeoutMs: 100 });
 
 describe('GET /health', () => {
   const pools: pg.Pool[] = [];
@@ -16,7 +20,7 @@ describe('GET /health', () => {
     async () => {
       const pool = new pg.Pool({ connectionString: databaseUrl });
       pools.push(pool);
-      const app = buildApp({ logLevel: 'silent' }, pool);
+      const app = buildApp({ logLevel: 'silent' }, pool, unusedSource);
 
       const response = await app.inject({ method: 'GET', url: '/health' });
 
@@ -31,7 +35,7 @@ describe('GET /health', () => {
       connectionTimeoutMillis: 500,
     });
     pools.push(pool);
-    const app = buildApp({ logLevel: 'silent' }, pool);
+    const app = buildApp({ logLevel: 'silent' }, pool, unusedSource);
 
     const response = await app.inject({ method: 'GET', url: '/health' });
 
