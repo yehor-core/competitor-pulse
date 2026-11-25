@@ -21,7 +21,12 @@ export interface PollOutcome {
   listing: StoredListing | null;
 }
 
-/** Rebuilds the comparable fields from a stored row; null when the row holds no listing. */
+const PERIODS: readonly PricePeriod[] = ['month', 'year', 'seat_month'];
+
+const periodOf = (value: string): PricePeriod | undefined =>
+  PERIODS.find((period) => period === value);
+
+/** Rebuilds the comparable fields from a stored row; null when the row holds no usable listing. */
 export function comparableOf(row: {
   title: string | null;
   tagline: string | null;
@@ -34,15 +39,13 @@ export function comparableOf(row: {
   if (title === null || tagline === null || priceAmount === null || description === null) {
     return null;
   }
+  const period = row.pricePeriod === null ? null : (periodOf(row.pricePeriod) ?? undefined);
+  if (period === undefined) return null;
   return {
     title,
     tagline,
     description,
-    priceParts: {
-      amount: Number(priceAmount),
-      currency: row.priceCurrency,
-      period: row.pricePeriod as PricePeriod | null,
-    },
+    priceParts: { amount: Number(priceAmount), currency: row.priceCurrency, period },
   };
 }
 

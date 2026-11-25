@@ -17,9 +17,9 @@ export interface SchedulerOptions {
   maxInFlight: number;
   /** How many more requests the Rate limit allows right now; a Poll is claimed only when one is free. */
   budget: { available(): number };
-  /** Called once the Snapshot of a Change that needs a Summary is committed; must not throw or block. */
   /** Called once per finished Poll with its Poll status. */
   onPollFinished?: (pollStatus: string) => void;
+  /** Called once the Snapshot of a Change that needs a Summary is committed; must not throw or block. */
   onChangePending?: (snapshotId: number) => void;
 }
 

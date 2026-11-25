@@ -112,7 +112,8 @@ export function createSummaryWorker({
     } else if (result.kind === 'ok') {
       await store(row, 'ready', result.text);
     } else {
-      log.warn({ snapshotId, outcome: result.kind }, 'Summary could not be written');
+      const reason = 'reason' in result ? result.reason : undefined;
+      log.warn({ snapshotId, outcome: result.kind, reason }, 'Summary could not be written');
       await store(row, STATUS_OF[result.kind], null);
     }
   }

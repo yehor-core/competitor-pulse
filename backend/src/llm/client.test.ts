@@ -71,7 +71,10 @@ describe('LLM client', () => {
       timeoutMs: 500,
     });
 
-    expect(await client.complete(prompt)).toMatchObject({ kind: 'not_sent' });
+    const result = await client.complete(prompt);
+
+    expect(result).toMatchObject({ kind: 'not_sent' });
+    expect(JSON.stringify(result)).toContain('Invalid URL');
   });
 
   it.each([
@@ -81,18 +84,21 @@ describe('LLM client', () => {
   ])('reports %s as unusable', async (_name, content) => {
     const client = await clientFor({ status: 200, content });
 
-    expect(await client.complete(prompt)).toEqual({ kind: 'unusable' });
+    expect(await client.complete(prompt)).toMatchObject({ kind: 'unusable' });
   });
 
   it('reports a body that is not a chat completion as unusable', async () => {
     const client = await clientFor({ status: 200, raw: '{"hello":"world"}' });
 
-    expect(await client.complete(prompt)).toEqual({ kind: 'unusable' });
+    expect(await client.complete(prompt)).toMatchObject({ kind: 'unusable' });
   });
 
   it('reports a body that is not JSON as unusable', async () => {
     const client = await clientFor({ status: 200, raw: 'not json' });
 
-    expect(await client.complete(prompt)).toEqual({ kind: 'unusable' });
+    expect(await client.complete(prompt)).toEqual({
+      kind: 'unusable',
+      reason: 'response body was not JSON',
+    });
   });
 });

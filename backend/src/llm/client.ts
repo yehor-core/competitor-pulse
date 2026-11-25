@@ -7,7 +7,8 @@ export type LlmResult =
   | { kind: 'failed'; reason: string }
   /** The request provably never left, so the Daily LLM budget slot can be given back. */
   | { kind: 'not_sent'; reason: string }
-  | { kind: 'unusable' };
+  /** `reason` says what was wrong with the answer, for the log. */
+  | { kind: 'unusable'; reason?: string };
 
 export interface LlmPrompt {
   system: string;
@@ -76,8 +77,9 @@ export function createLlmClient({
             ],
           }),
         });
-      } catch {
-        return { kind: 'not_sent', reason: 'LLM request could not be built' };
+      } catch (error) {
+        const cause = error instanceof Error ? error.message : String(error);
+        return { kind: 'not_sent', reason: `LLM request could not be built: ${cause}` };
       }
       let response: Response;
       try {
@@ -97,12 +99,16 @@ export function createLlmClient({
         body = await response.json();
       } catch (error) {
         if (isTimeout(error)) return { kind: 'timeout' };
-        return { kind: 'unusable' };
+        return { kind: 'unusable', reason: 'response body was not JSON' };
       }
       const parsed = chatCompletionSchema.safeParse(body);
       const content = parsed.success ? parsed.data.choices[0]?.message.content : undefined;
       const summary = parseSummaryText(content);
-      return summary.kind === 'ok' ? { kind: 'ok', text: summary.text } : { kind: 'unusable' };
+      if (summary.kind === 'ok') return { kind: 'ok', text: summary.text };
+      return {
+        kind: 'unusable',
+        reason: parsed.success ? 'summary text was empty or too long' : 'not a chat completion',
+      };
     },
   };
 }
