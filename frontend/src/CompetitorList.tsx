@@ -17,7 +17,7 @@ async function errorMessage(response: Response): Promise<string> {
   return `Request failed with HTTP ${String(response.status)}`;
 }
 
-export function CompetitorList() {
+export function CompetitorList({ onOpen }: { onOpen: (id: string) => void }) {
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [newId, setNewId] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +92,14 @@ export function CompetitorList() {
         <ul>
           {competitors.map((competitor) => (
             <li key={competitor.id}>
-              {competitor.id}
+              <button
+                type="button"
+                onClick={() => {
+                  onOpen(competitor.id);
+                }}
+              >
+                {competitor.id}
+              </button>
               {competitor.awaitingFirstPollReason !== null && (
                 <span> (waiting for first poll: {competitor.awaitingFirstPollReason})</span>
               )}{' '}
