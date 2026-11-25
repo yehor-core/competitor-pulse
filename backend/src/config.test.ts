@@ -38,6 +38,12 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...valid, SOURCE_BASE_URL: 'not a url' })).toThrow(/SOURCE_BASE_URL/);
   });
 
+  it('rejects a URL that is not http or https', () => {
+    expect(() => loadConfig({ ...valid, SOURCE_BASE_URL: 'ftp://example.com' })).toThrow(
+      /SOURCE_BASE_URL/,
+    );
+  });
+
   it('rejects a poll interval that is not a positive integer', () => {
     expect(() => loadConfig({ ...valid, POLL_INTERVAL_SECONDS: '0' })).toThrow(
       /POLL_INTERVAL_SECONDS/,

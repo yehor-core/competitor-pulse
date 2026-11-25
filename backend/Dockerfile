@@ -4,7 +4,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY backend/package.json backend/
 COPY frontend/package.json frontend/
-RUN npm ci -w backend
+RUN npm ci -w backend --ignore-scripts
 COPY backend backend
 RUN npm run build -w backend
 
@@ -14,7 +14,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY backend/package.json backend/
 COPY frontend/package.json frontend/
-RUN npm ci -w backend --omit=dev
+RUN npm ci -w backend --omit=dev --ignore-scripts
 COPY --from=build /app/backend/dist backend/dist
 COPY backend/drizzle backend/drizzle
 WORKDIR /app/backend

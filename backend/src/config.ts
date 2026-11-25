@@ -1,11 +1,13 @@
 import { z } from 'zod';
 
+const httpUrl = z.url({ protocol: /^https?$/ });
+
 const envSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   DATABASE_URL: z.string().min(1),
-  SOURCE_BASE_URL: z.url(),
-  LLM_BASE_URL: z.url(),
+  SOURCE_BASE_URL: httpUrl,
+  LLM_BASE_URL: httpUrl,
   LLM_API_KEY: z.string().min(1),
   LLM_MODEL: z.string().min(1),
   POLL_INTERVAL_SECONDS: z.coerce.number().int().positive(),
@@ -49,15 +51,15 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
       parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`),
     );
   }
-  const e = parsed.data;
+  const values = parsed.data;
   return {
-    port: e.PORT,
-    logLevel: e.LOG_LEVEL,
-    databaseUrl: e.DATABASE_URL,
-    sourceBaseUrl: e.SOURCE_BASE_URL,
-    llmBaseUrl: e.LLM_BASE_URL,
-    llmApiKey: e.LLM_API_KEY,
-    llmModel: e.LLM_MODEL,
-    pollIntervalSeconds: e.POLL_INTERVAL_SECONDS,
+    port: values.PORT,
+    logLevel: values.LOG_LEVEL,
+    databaseUrl: values.DATABASE_URL,
+    sourceBaseUrl: values.SOURCE_BASE_URL,
+    llmBaseUrl: values.LLM_BASE_URL,
+    llmApiKey: values.LLM_API_KEY,
+    llmModel: values.LLM_MODEL,
+    pollIntervalSeconds: values.POLL_INTERVAL_SECONDS,
   };
 }

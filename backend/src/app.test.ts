@@ -11,16 +11,19 @@ describe('GET /health', () => {
     await Promise.all(pools.map((pool) => pool.end()));
   });
 
-  it.skipIf(!databaseUrl)('answers 200 when the database is reachable', async () => {
-    const pool = new pg.Pool({ connectionString: databaseUrl });
-    pools.push(pool);
-    const app = buildApp({ logLevel: 'silent' }, pool);
+  it.skipIf(!databaseUrl && !process.env.CI)(
+    'answers 200 when the database is reachable',
+    async () => {
+      const pool = new pg.Pool({ connectionString: databaseUrl });
+      pools.push(pool);
+      const app = buildApp({ logLevel: 'silent' }, pool);
 
-    const response = await app.inject({ method: 'GET', url: '/health' });
+      const response = await app.inject({ method: 'GET', url: '/health' });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: 'ok' });
-  });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ status: 'ok' });
+    },
+  );
 
   it('answers 503 with a reason when the database is unreachable', async () => {
     const pool = new pg.Pool({
