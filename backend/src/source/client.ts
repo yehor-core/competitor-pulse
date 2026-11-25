@@ -5,13 +5,15 @@ import { z } from 'zod';
 const listingBodySchema = z.looseObject({});
 
 export type ListingLookup =
-  { kind: 'known' } | { kind: 'unknown' } | { kind: 'unavailable'; reason: string };
+  | { kind: 'known' }
+  | { kind: 'unknown' }
+  | { kind: 'unavailable'; reason: string; retryAfterSeconds?: number };
 
 /** A 404 means the Source does not know the id or has delisted it; the caller knows which. */
 export type ListingFetch =
   | { kind: 'listing'; body: Record<string, unknown> }
   | { kind: 'not_found' }
-  | { kind: 'unavailable'; reason: string };
+  | { kind: 'unavailable'; reason: string; retryAfterSeconds?: number };
 
 export interface SourceClient {
   lookup(id: string): Promise<ListingLookup>;
@@ -46,9 +48,14 @@ export function createSourceClient({ baseUrl, timeoutMs }: SourceClientOptions):
       await response.body?.cancel();
       const retryAfter = response.headers.get('Retry-After');
       const hint = response.status === 429 && retryAfter ? ` (retry after ${retryAfter} s)` : '';
+      const retryAfterSeconds = Number(retryAfter);
       return {
         kind: 'unavailable',
         reason: `source answered HTTP ${String(response.status)}${hint}`,
+        // Number(null) is 0, so a missing header must be excluded explicitly.
+        ...(response.status === 429 && retryAfter !== null && retryAfterSeconds >= 0
+          ? { retryAfterSeconds }
+          : {}),
       };
     }
 
