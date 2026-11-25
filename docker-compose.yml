@@ -46,6 +46,11 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-mock-key}
       LLM_MODEL: ${LLM_MODEL:-mock-llm}
       POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-900}
+      POLL_MAX_IN_FLIGHT: ${POLL_MAX_IN_FLIGHT:-4}
+      SOURCE_REQUESTS_PER_SECOND: ${SOURCE_REQUESTS_PER_SECOND:-4}
+      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-20000}
+      LLM_DAILY_CAP: ${LLM_DAILY_CAP:-2000}
+      LLM_BUDGET_WINDOWS_PER_DAY: ${LLM_BUDGET_WINDOWS_PER_DAY:-24}
     depends_on:
       postgres:
         condition: service_healthy
