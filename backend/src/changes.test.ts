@@ -8,6 +8,7 @@ import { createScheduler } from './scheduler/scheduler.js';
 import { createSourceClient } from './source/client.js';
 import { startSource, type RunningSource } from './test-support/source.js';
 import { startStubSource, type StubSource } from './test-support/stub-source.js';
+import { roomyBudget } from './test-support/budget.js';
 
 // Real Postgres; the provided Source for versions, a scripted stub where the exact Listing matters.
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -82,6 +83,7 @@ describe.skipIf(!enabled)('change detection', () => {
       { logLevel: 'silent' },
       pool,
       createSourceClient({ baseUrl: source.baseUrl, timeoutMs: 500 }),
+      roomyBudget(pool),
     );
   });
 

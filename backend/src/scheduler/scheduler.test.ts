@@ -13,6 +13,7 @@ import { rateLimitSource } from '../source/rate-limited.js';
 import { startSource, type RunningSource } from '../test-support/source.js';
 import { pollLagSeconds } from './poll-lag.js';
 import { createScheduler, type SchedulerOptions } from './scheduler.js';
+import { roomyBudget } from '../test-support/budget.js';
 
 // Real Postgres and the provided Source, as the project rules require.
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -69,7 +70,7 @@ describe.skipIf(!enabled)('scheduled polling', () => {
     pool = new pg.Pool({ connectionString: databaseUrl });
     source = await startSource();
     sourceClient = createSourceClient({ baseUrl: source.baseUrl, timeoutMs: 500 });
-    app = buildApp({ logLevel: 'silent' }, pool, sourceClient);
+    app = buildApp({ logLevel: 'silent' }, pool, sourceClient, roomyBudget(pool));
   });
 
   afterAll(async () => {

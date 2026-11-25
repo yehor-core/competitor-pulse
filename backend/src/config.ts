@@ -13,6 +13,8 @@ const envSchema = z.object({
   LLM_API_KEY: z.string().min(1),
   LLM_MODEL: z.string().min(1),
   LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+  LLM_DAILY_CAP: z.coerce.number().int().min(0).default(2000),
+  LLM_BUDGET_WINDOWS_PER_DAY: z.coerce.number().int().min(1).max(1440).default(24),
   POLL_INTERVAL_SECONDS: z.coerce.number().int().positive(),
   SCHEDULER_TICK_MS: z.coerce.number().int().positive().default(1000),
   POLL_MAX_IN_FLIGHT: z.coerce.number().int().positive().default(4),
@@ -29,6 +31,8 @@ export interface Config {
   llmApiKey: string;
   llmModel: string;
   llmTimeoutMs: number;
+  llmDailyCap: number;
+  llmBudgetWindowsPerDay: number;
   pollIntervalSeconds: number;
   schedulerTickMs: number;
   pollMaxInFlight: number;
@@ -73,6 +77,8 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     llmApiKey: values.LLM_API_KEY,
     llmModel: values.LLM_MODEL,
     llmTimeoutMs: values.LLM_TIMEOUT_MS,
+    llmDailyCap: values.LLM_DAILY_CAP,
+    llmBudgetWindowsPerDay: values.LLM_BUDGET_WINDOWS_PER_DAY,
     pollIntervalSeconds: values.POLL_INTERVAL_SECONDS,
     schedulerTickMs: values.SCHEDULER_TICK_MS,
     pollMaxInFlight: values.POLL_MAX_IN_FLIGHT,

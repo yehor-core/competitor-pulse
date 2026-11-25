@@ -3,6 +3,7 @@ import pg from 'pg';
 import { buildApp } from './app.js';
 import { loadConfigOrExit } from './config.js';
 import { createTokenBucket } from './domain/token-bucket.js';
+import { createLlmBudget } from './llm/budget.js';
 import { createLlmClient } from './llm/client.js';
 import { createSummaryWorker } from './summaries/worker.js';
 import { createScheduler } from './scheduler/scheduler.js';
@@ -21,8 +22,13 @@ const source = rateLimitSource(
   createSourceClient({ baseUrl: config.sourceBaseUrl, timeoutMs: config.sourceTimeoutMs }),
   bucket,
 );
-const app = buildApp(config, pool, source);
 const db = drizzle(pool);
+const budget = createLlmBudget({
+  db,
+  policy: { dailyCap: config.llmDailyCap, windowsPerDay: config.llmBudgetWindowsPerDay },
+  now: () => new Date(),
+});
+const app = buildApp(config, pool, source, budget);
 const summaries = createSummaryWorker({
   db,
   llm: createLlmClient({
@@ -31,6 +37,7 @@ const summaries = createSummaryWorker({
     model: config.llmModel,
     timeoutMs: config.llmTimeoutMs,
   }),
+  budget,
   log: app.log,
 });
 const scheduler = createScheduler({

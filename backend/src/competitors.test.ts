@@ -4,6 +4,7 @@ import { buildApp } from './app.js';
 import { runMigrations } from './db/migrate.js';
 import { createSourceClient } from './source/client.js';
 import { startSource, type RunningSource } from './test-support/source.js';
+import { roomyBudget } from './test-support/budget.js';
 
 // Real Postgres and the provided Source, as the project rules require.
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -25,6 +26,7 @@ describe.skipIf(!enabled)('competitors API', () => {
       { logLevel: 'silent' },
       pool,
       createSourceClient({ baseUrl: source.baseUrl, timeoutMs: 500 }),
+      roomyBudget(pool),
     );
 
   beforeAll(async () => {

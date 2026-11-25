@@ -4,12 +4,14 @@ import type { FastifyBaseLogger } from 'fastify';
 import { snapshots } from '../db/schema.js';
 import { compareWithBaseline } from '../domain/compare.js';
 import { buildSummaryPrompt, type PromptListing } from '../domain/summary-text.js';
+import type { LlmBudget } from '../llm/budget.js';
 import type { LlmClient, LlmResult } from '../llm/client.js';
 import { comparableOf } from '../snapshots/model.js';
 
 export interface SummaryWorkerOptions {
   db: NodePgDatabase;
   llm: LlmClient;
+  budget: LlmBudget;
   log: FastifyBaseLogger;
 }
 
@@ -22,7 +24,7 @@ export interface SummaryWorker {
 
 type SnapshotRow = typeof snapshots.$inferSelect;
 
-const STATUS_OF: Record<Exclude<LlmResult['kind'], 'ok'>, string> = {
+const STATUS_OF: Record<Exclude<LlmResult['kind'], 'ok' | 'not_sent'>, string> = {
   timeout: 'llm_timeout',
   failed: 'llm_failed',
   unusable: 'llm_unusable',
@@ -34,7 +36,7 @@ function promptListingOf(row: SnapshotRow): PromptListing | null {
   return { title, tagline, price, description };
 }
 
-export function createSummaryWorker({ db, llm, log }: SummaryWorkerOptions): SummaryWorker {
+export function createSummaryWorker({ db, llm, budget, log }: SummaryWorkerOptions): SummaryWorker {
   const running = new Set<Promise<void>>();
 
   async function baselineOf(row: SnapshotRow): Promise<SnapshotRow | undefined> {
@@ -84,12 +86,21 @@ export function createSummaryWorker({ db, llm, log }: SummaryWorkerOptions): Sum
     );
     const prompt = buildSummaryPrompt(baselineListing, current, changedFields);
 
-    // Ticket 07 seam: reserve a Daily LLM budget slot here, before the call. When none is left, store
-    // `budget_exhausted` with a null Summary and return. Refund the slot only when the request provably
-    // never left (see ADR-0002); the LlmResult kinds below all mean the request was sent.
+    // The slot is taken before the call so concurrent Changes cannot pass the cap together (ADR-0002).
+    const slot = await budget.reserve();
+    if (!slot) {
+      log.warn({ snapshotId }, 'Daily LLM budget has no slot left; Summary not written');
+      await store(row, 'budget_exhausted', null);
+      return;
+    }
     const result = await llm.complete(prompt);
 
-    if (result.kind === 'ok') {
+    if (result.kind === 'not_sent') {
+      // Only a request that provably never left gets its slot back; every other outcome may have been billed.
+      await slot.refund();
+      log.warn({ snapshotId, reason: result.reason }, 'LLM request was not sent; slot refunded');
+      await store(row, STATUS_OF.failed, null);
+    } else if (result.kind === 'ok') {
       await store(row, 'ready', result.text);
     } else {
       log.warn({ snapshotId, outcome: result.kind }, 'Summary could not be written');
